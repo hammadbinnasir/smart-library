@@ -3,7 +3,7 @@ import express from "express";
 import { createServer as createViteServer } from "vite";
 import path from "path";
 import { fileURLToPath } from "url";
-import { addDays, isAfter } from "date-fns";
+import { addDays, addMinutes, isAfter } from "date-fns";
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
@@ -409,7 +409,7 @@ async function startServer() {
             data: {
               bookId: trans.bookId,
               userId: resv.userId,
-              dueDate: addDays(new Date(), 14),
+              dueDate: addMinutes(new Date(), 1), // TEMPORARY 1 MINUTE FOR TESTING
               status: "BORROWED"
             }
           });
@@ -570,7 +570,7 @@ async function startServer() {
           data: {
             bookId,
             userId: user.id,
-            dueDate: addDays(new Date(), 14),
+            dueDate: addMinutes(new Date(), 1), // TEMPORARY 1 MINUTE FOR TESTING
             status: "BORROWED"
           }
         });
