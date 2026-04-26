@@ -23,16 +23,22 @@ npm install
 ```
 
 ### 3. Environment Configuration
-Create a file named `.env` in the root directory and add your Supabase connection string:
+The easiest way to configure the environment is to double-click `setup.bat` (Windows). It will create a `.env` file for you. 
+Open the `.env` file and add your Supabase connection strings:
 ```env
-DATABASE_URL="your_supabase_postgresql_url"
+# Port 6543 (Transaction Pooler)
+DATABASE_URL="your_supabase_postgresql_url?pgbouncer=true"
+
+# Port 5432 (Session connection)
+DIRECT_URL="your_supabase_postgresql_direct_url"
+
 JWT_SECRET="generate_any_random_string_here"
 ADMIN_CODE="SMARTLIB-2026"
 ```
-> **Note:** Use the "Transaction Pooler" URI from Supabase (Port 6543) and append `?pgbouncer=true` to the end.
+> **Critical Fix:** Supabase requires a `DIRECT_URL` (Port 5432) for `prisma db push` to work, while `DATABASE_URL` (Port 6543) is used by the application for high performance.
 
 ### 4. Database Sync
-Push the schema to your live database:
+You can run the `setup.bat` script again, or manually push the schema:
 ```bash
 npx prisma db push
 ```

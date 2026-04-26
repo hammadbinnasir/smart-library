@@ -4,16 +4,33 @@ echo   Smart Library System - Automated Setup
 echo ==========================================
 echo.
 
-echo [1/4] Installing dependencies...
+echo [1/5] Checking Environment Variables...
+if not exist .env (
+    echo   Creating .env from .env.example...
+    copy .env.example .env
+    echo   ====================================================
+    echo   ACTION REQUIRED:
+    echo   A new .env file has been created. 
+    echo   Please open .env and add your database credentials.
+    echo   After saving the credentials, run setup.bat again.
+    echo   ====================================================
+    pause
+    exit /b
+) else (
+    echo   .env file found.
+)
+echo.
+
+echo [2/5] Installing dependencies...
 call npm install
 
-echo [2/4] Generating Prisma client...
+echo [3/5] Generating Prisma client...
 call npx prisma generate
 
-echo [3/4] Synchronizing database...
+echo [4/5] Synchronizing database...
 call npx prisma db push
 
-echo [4/4] Seeding initial data...
+echo [5/5] Seeding initial data...
 call npx tsx prisma/seed-books.ts
 
 echo.
