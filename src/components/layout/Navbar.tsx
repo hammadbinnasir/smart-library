@@ -32,7 +32,7 @@ export const Navbar = ({ user, onLogout, activeTab, notifications = [] }: Navbar
   }, []);
 
   return (
-    <header className="flex justify-between items-center mb-8 bg-white/40 backdrop-blur-xl sticky top-0 py-6 z- 20 border-b border-white/20 -mx-8 px-8">
+    <header className="flex justify-between items-center mb-8 bg-white/40 backdrop-blur-xl sticky top-0 py-6 z-[99] isolate border-b border-white/20 -mx-8 px-8">
       <div>
         <h2 className="text-3xl font-bold text-brand-dark tracking-tight leading-none">
           {tabTitles[activeTab] || 'Library System'}
