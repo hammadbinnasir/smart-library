@@ -418,7 +418,7 @@ export default function App() {
           notifications={currentNotifications}
         />
 
-        <section className="max-w-7xl mx-auto pb-20">
+        <section className="max-w-7xl mx-auto pb-20 relative z-0">
           {activeTab === 'dashboard' && (
             <Dashboard 
               stats={stats} 

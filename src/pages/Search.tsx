@@ -38,7 +38,7 @@ export const Search = ({
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
       {/* Floating Sticky Search Header */}
-      <div className="sticky top-[-32px] z-20 -mx-8 px-8 py-4 bg-slate-50/80 backdrop-blur-md transition-all duration-500">
+      <div className="sticky top-[-32px] z-10 -mx-8 px-8 py-4 bg-slate-50/80 backdrop-blur-md transition-all duration-500">
         <Card className="p-6 group shadow-[0_20px_50px_-12px_rgba(0,0,0,0.08)] overflow-visible border-white bg-white/90">
           <div className="flex flex-col xl:flex-row gap-6">
             <div className="flex-1 relative group/input">
