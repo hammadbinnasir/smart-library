@@ -2,7 +2,7 @@
 
 A sophisticated, modern, and highly functional Library Management system designed for professional academic and public institutions. Built with a focus on visual excellence, cloud scalability, and a seamless administrative experience.
 
-![Dashboard Preview](https://api.dicebear.com/7.x/shapes/svg?seed=LibraryAnalytics&backgroundColor=4f46e5)
+![Dashboard Preview]
 
 ## 🌟 Key Features
 
