@@ -15,9 +15,13 @@ import {
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { format } from 'date-fns';
+import { EditProfileModal } from '../components/modals/EditProfileModal';
+import { AccountSettingsModal } from '../components/modals/AccountSettingsModal';
 
 interface ProfileProps {
   user: any;
+  onUpdateUser: (user: any) => void;
+  showToast: (type: 'success' | 'error', message: string) => void;
 }
 
 const DetailCard = ({ icon: Icon, label, value, color }: any) => (
@@ -35,7 +39,10 @@ const DetailCard = ({ icon: Icon, label, value, color }: any) => (
   </motion.div>
 );
 
-export const Profile = ({ user }: ProfileProps) => {
+export const Profile = ({ user, onUpdateUser, showToast }: ProfileProps) => {
+  const [showEditModal, setShowEditModal] = React.useState(false);
+  const [showSettingsModal, setShowSettingsModal] = React.useState(false);
+
   if (!user) return null;
 
   return (
@@ -72,11 +79,17 @@ export const Profile = ({ user }: ProfileProps) => {
         </div>
         
         <div className="flex gap-3">
-          <button className="px-6 py-3 bg-white border border-slate-100 text-slate-600 rounded-2xl font-bold text-sm flex items-center gap-2 hover:bg-slate-50 transition-colors shadow-sm">
+          <button 
+            onClick={() => setShowEditModal(true)}
+            className="px-6 py-3 bg-white border border-slate-100 text-slate-600 rounded-2xl font-bold text-sm flex items-center gap-2 hover:bg-slate-50 transition-colors shadow-sm"
+          >
             <Edit size={18} />
             Edit Profile
           </button>
-          <button className="px-6 py-3 bg-brand-dark text-white rounded-2xl font-bold text-sm flex items-center gap-2 hover:bg-slate-800 transition-colors shadow-lg shadow-slate-200">
+          <button 
+            onClick={() => setShowSettingsModal(true)}
+            className="px-6 py-3 bg-brand-dark text-white rounded-2xl font-bold text-sm flex items-center gap-2 hover:bg-slate-800 transition-colors shadow-lg shadow-slate-200"
+          >
             <Settings size={18} />
             Account Settings
           </button>
@@ -199,6 +212,22 @@ export const Profile = ({ user }: ProfileProps) => {
           </div>
         </aside>
       </div>
+
+      <EditProfileModal 
+        show={showEditModal} 
+        onClose={() => setShowEditModal(false)} 
+        user={user} 
+        onUpdate={(updated) => {
+          onUpdateUser(updated);
+          showToast('success', 'Profile updated successfully!');
+        }} 
+      />
+
+      <AccountSettingsModal 
+        show={showSettingsModal} 
+        onClose={() => setShowSettingsModal(false)}
+        onSuccess={(msg) => showToast('success', msg)}
+      />
     </motion.div>
   );
 };

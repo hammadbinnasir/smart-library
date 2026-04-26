@@ -165,6 +165,20 @@ async function startServer() {
   app.post("/api/auth/register", async (req, res) => {
     const { name, email, password, role, adminCode, gender } = req.body;
     
+    // --- Server-side Validation ---
+    if (!name || !email || !password || !gender) {
+      return res.status(400).json({ error: "All fields (Name, Email, Password, Gender) are required." });
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({ error: "Invalid email format." });
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({ error: "Password must be at least 6 characters long." });
+    }
+
     if (role === 'LIBRARIAN') {
       const EXPECTED_ADMIN_CODE = process.env.ADMIN_CODE || "SMARTLIB-2026";
       if (adminCode !== EXPECTED_ADMIN_CODE) {
@@ -266,6 +280,52 @@ async function startServer() {
   // Get current user profile
   app.get("/api/me", (req, res) => {
     res.json((req as any).user);
+  });
+
+  // Update current user profile
+  app.patch("/api/me", async (req, res) => {
+    const currentUser = (req as any).user;
+    if (!currentUser) return res.status(401).json({ error: "Unauthorized" });
+
+    const { name, gender } = req.body;
+    try {
+      const updatedUser = await prisma.user.update({
+        where: { id: currentUser.id },
+        data: { name, gender }
+      });
+      res.json(updatedUser);
+    } catch (err) {
+      res.status(500).json({ error: "Failed to update profile" });
+    }
+  });
+
+  // Update password
+  app.patch("/api/me/password", async (req, res) => {
+    const currentUser = (req as any).user;
+    if (!currentUser) return res.status(401).json({ error: "Unauthorized" });
+
+    const { currentPassword, newPassword } = req.body;
+    try {
+      const user = await prisma.user.findUnique({ where: { id: currentUser.id } });
+      if (!user) return res.status(404).json({ error: "User not found" });
+
+      const isMatch = await bcrypt.compare(currentPassword, user.password);
+      if (!isMatch) return res.status(400).json({ error: "Incorrect current password" });
+
+      if (newPassword.length < 6) {
+        return res.status(400).json({ error: "New password must be at least 6 characters long" });
+      }
+
+      const hashedPassword = await bcrypt.hash(newPassword, 10);
+      await prisma.user.update({
+        where: { id: currentUser.id },
+        data: { password: hashedPassword }
+      });
+
+      res.json({ message: "Password updated successfully" });
+    } catch (err) {
+      res.status(500).json({ error: "Failed to update password" });
+    }
   });
 
 

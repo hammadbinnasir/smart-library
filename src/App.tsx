@@ -455,7 +455,7 @@ export default function App() {
               handleDeleteUser={handleDeleteUser}
             />
           )}
-          {activeTab === 'profile' && <Profile user={user} />}
+          {activeTab === 'profile' && <Profile user={user} onUpdateUser={setUser} showToast={showToast} />}
         </section>
 
         {/* Global Toast System */}

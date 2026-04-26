@@ -21,6 +21,38 @@ export const AuthPage = ({ onLogin }: AuthPageProps) => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    
+    // --- Client-side Validation ---
+    if (!email || !password) {
+      setError('Email and password are required');
+      return;
+    }
+
+    if (!isLogin) {
+      if (!name.trim()) {
+        setError('Please enter your full name');
+        return;
+      }
+      if (!gender) {
+        setError('Please select your gender');
+        return;
+      }
+      if (password.length < 6) {
+        setError('Password must be at least 6 characters long');
+        return;
+      }
+      if (portal === 'LIBRARIAN' && !adminCode) {
+        setError('Admin Authorization Code is required for staff registration');
+        return;
+      }
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      setError('Please enter a valid email address');
+      return;
+    }
+
     setLoading(true);
 
     try {
