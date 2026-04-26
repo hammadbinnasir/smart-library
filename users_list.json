@@ -1,0 +1,29 @@
+[
+  {
+    "id": "cmnoxy1480000q15kspighskz",
+    "email": "iman@library.pro",
+    "name": "Sheikh Iman Ali",
+    "password": "$2b$10$pfux9EhdSyBa3cnEc6aOPesH.GW1Ir9AoIZ30uccZ1jybqe90BlOm",
+    "gender": "MALE",
+    "role": "LIBRARIAN",
+    "createdAt": "2026-04-07T18:16:47.136Z"
+  },
+  {
+    "id": "cmnoxy15n0001q15kxoqyob6l",
+    "email": "hammad@student.pk",
+    "name": "Hammad Butt",
+    "password": "$2b$10$pfux9EhdSyBa3cnEc6aOPesH.GW1Ir9AoIZ30uccZ1jybqe90BlOm",
+    "gender": "MALE",
+    "role": "STUDENT",
+    "createdAt": "2026-04-07T18:16:47.196Z"
+  },
+  {
+    "id": "cmnrnwcn30002q148kedyq2jf",
+    "email": "rehmanmughal@gmail.com",
+    "name": "Rehman Mughal",
+    "password": "$2b$10$TjEUR9HvtJSshVip/aqZeuNRGcVXzqgH2pIn8jKR2dVR1GxPwVEbS",
+    "gender": null,
+    "role": "STUDENT",
+    "createdAt": "2026-04-09T15:58:51.136Z"
+  }
+]

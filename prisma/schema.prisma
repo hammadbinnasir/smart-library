@@ -1,0 +1,84 @@
+// Database Schema (Prisma)
+// This file defines the structure for Users, Books, Transactions, and Reservations.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String         @id @default(cuid())
+  email         String         @unique
+  name          String
+  password      String
+  gender        Gender?
+  role          Role           @default(STUDENT)
+  borrowedBooks Transaction[]
+  reservations  Reservation[]
+  createdAt     DateTime       @default(now())
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
+enum Role {
+  STUDENT
+  LIBRARIAN
+}
+
+model Book {
+  id            String         @id @default(cuid())
+  title         String
+  author        String
+  category      String
+  isbn          String         @unique
+  imageUrl      String?        // Custom cover image URL
+  totalCopies   Int            @default(1)
+  availableCopies Int          @default(1)
+  borrowedCount Int            @default(0)
+  transactions  Transaction[]
+  reservations  Reservation[]
+  createdAt     DateTime       @default(now())
+}
+
+model Transaction {
+  id         String    @id @default(cuid())
+  bookId     String
+  userId     String
+  book       Book      @relation(fields: [bookId], references: [id])
+  user       User      @relation(fields: [userId], references: [id])
+  borrowDate DateTime  @default(now())
+  dueDate    DateTime
+  returnDate DateTime?
+  status     TransStatus @default(BORROWED)
+}
+
+enum TransStatus {
+  BORROWED
+  RETURNED
+  OVERDUE
+}
+
+model Reservation {
+  id              String    @id @default(cuid())
+  bookId          String
+  userId          String
+  book            Book      @relation(fields: [bookId], references: [id])
+  user            User      @relation(fields: [userId], references: [id])
+  reservedAt      DateTime  @default(now())
+  status          ResStatus @default(PENDING)
+  queuePosition   Int
+}
+
+enum ResStatus {
+  PENDING
+  FULFILLED
+  CANCELLED
+}
