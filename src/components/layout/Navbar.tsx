@@ -65,8 +65,8 @@ export const Navbar = ({ user, onLogout, activeTab, notifications = [] }: Navbar
 
             {/* Notifications Dropdown */}
             {showNotifs && (
-              <div className="absolute right-0 mt-4 w-96 bg-white/80 backdrop-blur-2xl rounded-[2.5rem] shadow-[0_30px_60px_-15px_rgba(0,0,0,0.1)] border border-slate-100 z-50 overflow-hidden origin-top-right animate-in fade-in zoom-in-95 duration-300">
-                <div className="p-6 border-b border-slate-50 bg-slate-50/50 flex justify-between items-center">
+              <div className="absolute right-0 mt-4 w-96 bg-white rounded-[2.5rem] shadow-[0_20px_60px_-15px_rgba(0,0,0,0.3)] border border-slate-100 z-50 overflow-hidden origin-top-right animate-in fade-in zoom-in-95 duration-300">
+                <div className="p-6 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
                   <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">Notifications</h3>
                   <span className="px-2 py-0.5 bg-indigo-50 text-indigo-600 text-[10px] font-bold rounded-full border border-indigo-100">{notifications.length}</span>
                 </div>
