@@ -8,6 +8,7 @@ import { Search } from './pages/Search';
 import { Reservations } from './pages/Reservations';
 import { History } from './pages/History';
 import { Moderation } from './pages/Moderation';
+import { Profile } from './pages/Profile';
 import { AddBookModal } from './components/modals/AddBookModal';
 import { BookDetailsModal } from './components/modals/BookDetailsModal';
 import { AuthPage } from './components/auth/AuthPage';
@@ -19,11 +20,13 @@ interface User {
   name: string;
   email: string;
   role: 'LIBRARIAN' | 'STUDENT';
+  gender?: string;
+  createdAt?: string;
 }
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'search' | 'reservations' | 'moderation' | 'history'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'search' | 'reservations' | 'moderation' | 'history' | 'profile'>('dashboard');
   const [books, setBooks] = useState<any[]>([]);
   const [allCategories, setAllCategories] = useState<string[]>([]);
   const [stats, setStats] = useState<any>(null);
@@ -452,6 +455,7 @@ export default function App() {
               handleDeleteUser={handleDeleteUser}
             />
           )}
+          {activeTab === 'profile' && <Profile user={user} />}
         </section>
 
         {/* Global Toast System */}

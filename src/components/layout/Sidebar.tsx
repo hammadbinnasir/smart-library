@@ -6,7 +6,8 @@ import {
   Clock, 
   Filter,
   Bell,
-  History as HistoryIcon
+  History as HistoryIcon,
+  User as UserIcon
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { cn } from '../../lib/utils';
@@ -88,6 +89,12 @@ export const Sidebar = ({ activeTab, setActiveTab, userRole }: SidebarProps) => 
             onClick={() => setActiveTab('moderation')} 
           />
         )}
+        <SidebarItem 
+          icon={UserIcon} 
+          label="My Profile" 
+          active={activeTab === 'profile'} 
+          onClick={() => setActiveTab('profile')} 
+        />
       </nav>
 
     </aside>
