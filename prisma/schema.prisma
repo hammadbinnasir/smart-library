@@ -18,9 +18,23 @@ model User {
   password      String
   gender        Gender?
   role          Role           @default(STUDENT)
+  imageUrl      String?        // Profile picture URL
   borrowedBooks Transaction[]
   reservations  Reservation[]
+  notifications Notification[]
+  resetToken     String?
+  resetTokenExpiry DateTime?
   createdAt     DateTime       @default(now())
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  message   String
+  type      String   // DUE_SOON, OVERDUE, etc.
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
 }
 
 enum Gender {

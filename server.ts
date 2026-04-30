@@ -3,19 +3,32 @@ import express from "express";
 import { createServer as createViteServer } from "vite";
 import path from "path";
 import { fileURLToPath } from "url";
-import { addDays, isAfter } from "date-fns";
+import { addDays, isAfter, format } from "date-fns";
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import cookieParser from "cookie-parser";
 import multer from "multer";
 import fs from "fs";
+import crypto from "crypto";
+import nodemailer from "nodemailer";
 
 const JWT_SECRET = process.env.JWT_SECRET || "library-secret-key-123";
 
 const prisma = new PrismaClient();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// Email Transporter Setup
+const transporter = nodemailer.createTransport({
+  host: process.env.SMTP_HOST || "smtp.gmail.com",
+  port: parseInt(process.env.SMTP_PORT || "587"),
+  secure: process.env.SMTP_SECURE === "true",
+  auth: {
+    user: process.env.SMTP_USER,
+    pass: process.env.SMTP_PASS,
+  },
+});
 
 // Global Error Guard to prevent silent crashes
 process.on("unhandledRejection", (reason) => {
@@ -110,6 +123,7 @@ async function startServer() {
     await ensureUsers();
     console.log("✅ Database synchronized successfully.");
   } catch (err) {
+    console.error("❌ Database connection error:", err);
     console.error("⚠️ Warning: Could not connect to database during startup. System will continue but some features may be unavailable.");
   }
   
@@ -200,21 +214,6 @@ async function startServer() {
     }
   });
 
-  // Delete user (Librarian only)
-  app.delete("/api/users/:id", async (req, res) => {
-    const user = (req as any).user;
-    if (user.role !== "LIBRARIAN") return res.status(403).json({ error: "Access denied" });
-    const { id } = req.params;
-    if (id === user.id) return res.status(400).json({ error: "Cannot delete your own administrative account." });
-
-    try {
-      await prisma.user.delete({ where: { id } });
-      res.json({ message: "Member account removed successfully." });
-    } catch (err) {
-      res.status(500).json({ error: "Failed to remove member." });
-    }
-  });
-
   app.post("/api/auth/login", async (req, res) => {
     const { email, password, portalRole } = req.body;
     console.log(`Login attempt: ${email} for portal: ${portalRole}`);
@@ -275,6 +274,102 @@ async function startServer() {
     res.json({ message: "Logged out" });
   });
 
+  app.post("/api/auth/forgot-password", async (req, res) => {
+    console.log("Forgot password request:", req.body);
+    const { email, role } = req.body;
+    try {
+      const user = await prisma.user.findUnique({ where: { email } });
+      
+      if (!user) {
+        return res.status(404).json({ 
+          error: "This email address is not registered in our system. Please check the spelling or create a new account." 
+        });
+      }
+
+      // Role-based validation
+      if (role && user.role !== role) {
+        return res.status(403).json({ 
+          error: `Access Restricted: This account is registered under the ${user.role} portal. Please switch to the appropriate portal to proceed with your request.` 
+        });
+      }
+
+      const resetToken = crypto.randomBytes(32).toString("hex");
+      const resetTokenExpiry = new Date(Date.now() + 3600000); // 1 hour
+
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { resetToken, resetTokenExpiry }
+      });
+
+      const resetUrl = `${req.protocol}://${req.get("host")}/reset-password?token=${resetToken}`;
+
+      const mailOptions = {
+        from: process.env.SMTP_FROM || '"Smart Library" <noreply@library.pro>',
+        to: user.email,
+        subject: "Password Reset Request",
+        html: `
+          <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
+            <h2 style="color: #2563eb;">Password Reset</h2>
+            <p>Hello ${user.name},</p>
+            <p>You requested a password reset for your Smart Library account. Click the button below to set a new password:</p>
+            <a href="${resetUrl}" style="display: inline-block; padding: 10px 20px; background-color: #2563eb; color: white; text-decoration: none; border-radius: 5px; margin: 20px 0;">Reset Password</a>
+            <p>If you didn't request this, you can safely ignore this email.</p>
+            <p>This link will expire in 1 hour.</p>
+          </div>
+        `,
+      };
+
+      if (process.env.SMTP_USER) {
+        await transporter.sendMail(mailOptions);
+      } else {
+        console.log("-----------------------------------------");
+        console.log("FORGOT PASSWORD TOKEN (No SMTP Configured)");
+        console.log(`To: ${user.email}`);
+        console.log(`URL: ${resetUrl}`);
+        console.log("-----------------------------------------");
+      }
+
+      res.json({ 
+        message: "If an account with that email exists, a reset link has been sent.",
+        resetUrl: resetUrl // Include URL for direct redirection in dev/test
+      });
+    } catch (err) {
+      console.error("Forgot password error:", err);
+      res.status(500).json({ error: "Failed to process request" });
+    }
+  });
+
+  app.post("/api/auth/reset-password", async (req, res) => {
+    const { token, password } = req.body;
+    try {
+      const user = await prisma.user.findFirst({
+        where: {
+          resetToken: token,
+          resetTokenExpiry: { gt: new Date() }
+        }
+      });
+
+      if (!user) {
+        return res.status(400).json({ error: "Invalid or expired reset token" });
+      }
+
+      const hashedPassword = await bcrypt.hash(password, 10);
+      await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          password: hashedPassword,
+          resetToken: null,
+          resetTokenExpiry: null
+        }
+      });
+
+      res.json({ message: "Password reset successful. You can now log in with your new password." });
+    } catch (err) {
+      console.error("Reset password error:", err);
+      res.status(500).json({ error: "Failed to reset password" });
+    }
+  });
+
   // --- API Routes ---
 
   // Get current user profile
@@ -329,6 +424,23 @@ async function startServer() {
   });
 
 
+  // Update profile picture
+  app.patch("/api/me/profile-picture", async (req, res) => {
+    const currentUser = (req as any).user;
+    if (!currentUser) return res.status(401).json({ error: "Unauthorized" });
+
+    const { imageUrl } = req.body;
+    try {
+      const updatedUser = await prisma.user.update({
+        where: { id: currentUser.id },
+        data: { imageUrl }
+      });
+      res.json(updatedUser);
+    } catch (err) {
+      res.status(500).json({ error: "Failed to update profile picture" });
+    }
+  });
+
   // Get borrowing history (Global for Librarian, Personal for Student)
   app.get("/api/history", async (req, res) => {
     const user = (req as any).user;
@@ -348,25 +460,24 @@ async function startServer() {
   // Manual Override: Mark as returned (Librarian only)
   app.post("/api/transactions/return", async (req, res) => {
     const user = (req as any).user;
-    if (user.role !== "LIBRARIAN") {
+    if (!user || user.role !== "LIBRARIAN") {
       return res.status(403).json({ error: "Access denied. Librarian role required." });
     }
     
     const { transactionId } = req.body;
     
     try {
-      const trans = await prisma.transaction.findUnique({
-        where: { id: transactionId },
-        include: { book: true }
-      });
+      const result = await prisma.$transaction(async (tx) => {
+        const trans = await tx.transaction.findUnique({
+          where: { id: transactionId },
+          include: { book: true }
+        });
 
-      if (!trans) return res.status(404).json({ error: "Transaction not found" });
-      if (trans.status === "RETURNED") return res.status(400).json({ error: "Book already returned" });
+        if (!trans) throw new Error("Transaction not found");
+        if (trans.status === "RETURNED") throw new Error("Book already returned");
 
-      let responseMessage = "Book returned successfully";
-
-      const updatedTrans = await prisma.$transaction(async (tx) => {
-        const t = await tx.transaction.update({
+        // 1. Mark as returned
+        const updatedTrans = await tx.transaction.update({
           where: { id: transactionId },
           data: {
             status: "RETURNED",
@@ -374,69 +485,39 @@ async function startServer() {
           }
         });
 
-        const reservations = await tx.reservation.findMany({
-          where: { bookId: trans.bookId, status: "PENDING" },
-          orderBy: { queuePosition: 'asc' },
-          include: { user: true }
+        // 2. Increment availableCopies (Primary source of truth)
+        await tx.book.update({
+          where: { id: trans.bookId },
+          data: { availableCopies: { increment: 1 } }
         });
 
-        let allocated = false;
-        for (const resv of reservations) {
-          const alreadyHasActive = await tx.transaction.findFirst({
-            where: {
-              userId: resv.userId,
-              bookId: trans.bookId,
-              status: { in: ["BORROWED", "OVERDUE"] }
-            }
-          });
-
-          if (alreadyHasActive) {
-            // User already has a copy, fulfill their reservation as they clearly don't need another one now
-            await tx.reservation.update({
-              where: { id: resv.id },
-              data: { status: "FULFILLED" }
-            });
-            continue;
+        // 3. Notify the next person who becomes "Ready"
+        const updatedBook = await tx.book.findUnique({ where: { id: trans.bookId } });
+        const nextInLine = await tx.reservation.findFirst({
+          where: { 
+            bookId: trans.bookId, 
+            status: "PENDING",
+            queuePosition: updatedBook?.availableCopies || 1
           }
+        });
 
-          // Allocate to this user
-          await tx.reservation.update({
-            where: { id: resv.id },
-            data: { status: "FULFILLED" }
-          });
-          
-          await tx.transaction.create({
+        if (nextInLine) {
+          await tx.notification.create({
             data: {
-              bookId: trans.bookId,
-              userId: resv.userId,
-              dueDate: addDays(new Date(), 14),
-              status: "BORROWED"
+              userId: nextInLine.userId,
+              type: "RESERVATION_READY",
+              message: `The book "${trans.book.title}" is now available for you! Visit your reservations to claim it.`
             }
           });
-          
-          await tx.book.update({
-            where: { id: trans.bookId },
-            data: { borrowedCount: { increment: 1 } }
-          });
-
-          responseMessage = `Book returned and auto-allocated to reserved member: ${resv.user.name}`;
-          allocated = true;
-          break;
         }
 
-        if (!allocated) {
-          await tx.book.update({
-            where: { id: trans.bookId },
-            data: { availableCopies: { increment: 1 } }
-          });
-        }
-
-        return t;
+        return { transaction: updatedTrans, notified: !!nextInLine };
       });
 
-      res.json({ message: responseMessage, transaction: updatedTrans });
-    } catch (err) {
-      res.status(500).json({ error: "Return failed" });
+      res.json({ message: "Book returned successfully", notified: result.notified });
+    } catch (err: any) {
+      console.error("Return error:", err);
+      res.status(400).json({ error: err.message || "Failed to process return" });
     }
   });
 
@@ -523,74 +604,100 @@ async function startServer() {
   });
 
   // Borrow a book
-  app.post("/api/transactions/borrow", async (req, res) => {
-    const user = (req as any).user;
+  app.post("/api/books/borrow", async (req, res) => {
     const { bookId } = req.body;
+    const currentUser = (req as any).user;
+    if (!currentUser) return res.status(401).json({ error: "Unauthorized" });
 
     try {
-      const book = await prisma.book.findUnique({ where: { id: bookId } });
-
-      if (!book) return res.status(404).json({ error: "Book not found" });
-      if (book.availableCopies <= 0) return res.status(400).json({ error: "Book is currently unavailable" });
-
-
-      const newTransaction = await prisma.$transaction(async (tx) => {
-        // Check inside transaction to prevent race conditions
-        const existingTransaction = await tx.transaction.findFirst({
-          where: {
-            userId: user.id,
-            bookId: bookId,
-            status: { in: ["BORROWED", "OVERDUE"] }
+      const result = await prisma.$transaction(async (tx) => {
+        const book = await tx.book.findUnique({ 
+          where: { id: bookId },
+          include: { 
+            reservations: { 
+              where: { status: "PENDING" }, 
+              orderBy: { queuePosition: 'asc' } 
+            } 
           }
         });
 
-        if (existingTransaction) {
-          throw new Error("ALREADY_BORROWED");
+        if (!book) throw new Error("Book not found");
+
+        const userReservation = book.reservations.find(r => r.userId === currentUser.id);
+        const queueLength = book.reservations.length;
+        
+        // Logical Permission Check
+        const canPublicBorrow = book.availableCopies > queueLength;
+        const isQueuePriority = userReservation && userReservation.queuePosition <= book.availableCopies;
+
+        if (!canPublicBorrow && !isQueuePriority) {
+          if (userReservation) {
+            throw new Error(`Queue Position: #${userReservation.queuePosition}. There are currently ${book.availableCopies} copies available. Please wait your turn.`);
+          } else {
+            throw new Error("All available copies are reserved for students in the queue. Please join the reservation list.");
+          }
         }
 
-        await tx.book.update({
-          where: { id: bookId },
-          data: { 
-            availableCopies: { decrement: 1 },
-            borrowedCount: { increment: 1 }
+        // Check for active borrows of SAME book
+        const activeBorrow = await tx.transaction.findFirst({
+          where: { 
+            userId: currentUser.id, 
+            bookId, 
+            status: { in: ["BORROWED", "OVERDUE"] } 
           }
         });
+        if (activeBorrow) throw new Error("You already have an active copy of this book.");
 
-        // Fulfill any pending reservations this user has for this book
-        await tx.reservation.updateMany({
-          where: {
-            userId: user.id,
-            bookId,
-            status: "PENDING"
-          },
-          data: { status: "FULFILLED" }
-        });
+        // Create transaction
+        const dueDate = new Date();
+        dueDate.setDate(dueDate.getDate() + 14);
 
-        return await tx.transaction.create({
+        const transaction = await tx.transaction.create({
           data: {
             bookId,
-            userId: user.id,
-            dueDate: addDays(new Date(), 14),
+            userId: currentUser.id,
+            dueDate,
             status: "BORROWED"
           }
         });
+
+        // Update book availability
+        await tx.book.update({
+          where: { id: bookId },
+          data: { 
+            borrowedCount: { increment: 1 },
+            availableCopies: { decrement: 1 }
+          }
+        });
+
+        // If user had a reservation, fulfill it and re-index the queue
+        if (userReservation) {
+          await tx.reservation.update({
+            where: { id: userReservation.id },
+            data: { status: "FULFILLED" }
+          });
+
+          // Shift everyone else up
+          const remaining = await tx.reservation.findMany({
+            where: { bookId, status: "PENDING" },
+            orderBy: { queuePosition: 'asc' }
+          });
+
+          for (let i = 0; i < remaining.length; i++) {
+            await tx.reservation.update({
+              where: { id: remaining[i].id },
+              data: { queuePosition: i + 1 }
+            });
+          }
+        }
+
+        return transaction;
       });
 
-      res.json(newTransaction);
+      res.json(result);
     } catch (err: any) {
-      console.log(`❌ Borrow error for user ${user?.id}:`, err.code || err.message);
-      
-      if (err.message === "ALREADY_BORROWED" || err.code === "P2002") {
-        return res.status(400).json({ 
-          error: "Already borrowed" 
-        });
-      }
-      
-      if (err.code === "P1001" || err.code === "P1003") {
-         return res.status(503).json({ error: "Database connection failed. Please try again in a moment." });
-      }
-
-      res.status(500).json({ error: "Borrowing failed" });
+      console.error("Borrow error:", err);
+      res.status(400).json({ error: err.message || "Borrowing failed" });
     }
   });
 
@@ -618,13 +725,59 @@ async function startServer() {
     }
   });
 
+  // Delete book (Librarian only)
+  app.delete("/api/books/:id", async (req, res) => {
+    const { id } = req.params;
+    console.log('DELETE request for book:', id);
+    const user = (req as any).user;
+    if (!user || user.role !== "LIBRARIAN") return res.status(403).json({ error: "Access denied" });
+    
+    try {
+      // We use a transaction to ensure all related data is cleaned up
+      await prisma.$transaction([
+        prisma.transaction.deleteMany({ where: { bookId: id } }),
+        prisma.reservation.deleteMany({ where: { bookId: id } }),
+        prisma.book.delete({ where: { id } })
+      ]);
+      res.json({ message: "Book and associated records removed successfully." });
+    } catch (err) {
+      console.error("Delete book error:", err);
+      res.status(500).json({ error: "Failed to remove book from catalog." });
+    }
+  });
+
   // Get all users (Librarian only)
   app.get("/api/users", async (req, res) => {
     const user = (req as any).user;
-    if (user.role !== "LIBRARIAN") return res.status(403).json({ error: "Access denied" });
+    if (!user || user.role !== "LIBRARIAN") return res.status(403).json({ error: "Access denied" });
     
     const users = await prisma.user.findMany();
     res.json(users);
+  });
+
+  // Delete user (Librarian only)
+  app.delete("/api/users/:id", async (req, res) => {
+    const { id } = req.params;
+    console.log('DELETE request for member:', id);
+    const user = (req as any).user;
+    if (!user || user.role !== "LIBRARIAN") return res.status(403).json({ error: "Access denied" });
+    
+    try {
+      // Prevent deleting self
+      if (id === user.id) {
+        return res.status(400).json({ error: "You cannot remove your own administrative account." });
+      }
+
+      await prisma.$transaction([
+        prisma.transaction.deleteMany({ where: { userId: id } }),
+        prisma.reservation.deleteMany({ where: { userId: id } }),
+        prisma.user.delete({ where: { id } })
+      ]);
+      res.json({ message: "Member account and history removed successfully." });
+    } catch (err) {
+      console.error("Delete user error:", err);
+      res.status(500).json({ error: "Failed to remove member account." });
+    }
   });
 
   // Reservation Logic
@@ -632,87 +785,122 @@ async function startServer() {
     const currentUser = (req as any).user;
     const { bookId } = req.body;
 
-    const existingReservation = await prisma.reservation.findFirst({
-      where: { userId: currentUser.id, bookId, status: "PENDING" }
-    });
+    try {
+      const reservation = await prisma.$transaction(async (tx) => {
+        // 1. Check if user already has it
+        const existingBorrow = await tx.transaction.findFirst({
+          where: { userId: currentUser.id, bookId, status: { in: ["BORROWED", "OVERDUE"] } }
+        });
+        if (existingBorrow) throw new Error("You already have an active borrowing of this book.");
 
-    if (existingReservation) {
-      return res.status(400).json({ error: "You already have a pending reservation for this book." });
+        const existingRes = await tx.reservation.findFirst({
+          where: { userId: currentUser.id, bookId, status: "PENDING" }
+        });
+        if (existingRes) throw new Error("You already have a pending reservation for this book.");
+
+        // 2. Check book availability
+        const book = await tx.book.findUnique({ where: { id: bookId } });
+        if (!book) throw new Error("Book not found");
+        if (book.availableCopies > 0) throw new Error("Book is available for immediate borrowing.");
+
+        // 3. Get next position
+        const count = await tx.reservation.count({
+          where: { bookId, status: "PENDING" }
+        });
+
+        return await tx.reservation.create({
+          data: {
+            bookId,
+            userId: currentUser.id,
+            queuePosition: count + 1,
+            status: "PENDING"
+          }
+        });
+      });
+
+      res.json(reservation);
+    } catch (err: any) {
+      res.status(400).json({ error: err.message || "Failed to create reservation" });
     }
-
-    const existingBorrow = await prisma.transaction.findFirst({
-      where: { 
-        userId: currentUser.id, 
-        bookId, 
-        status: { in: ["BORROWED", "OVERDUE"] }
-      }
-    });
-
-    if (existingBorrow) {
-      return res.status(400).json({ error: "You already have an active borrowing of this book and cannot reserve another copy." });
-    }
-    
-    const book = await prisma.book.findUnique({ 
-      where: { id: bookId },
-      include: { reservations: { where: { status: "PENDING" } } }
-    });
-
-    if (!book) return res.status(404).json({ error: "Book not found" });
-    
-    // Strict Objective Alignment: Only reserve if book is currently borrowed (out of stock)
-    if (book.availableCopies > 0) {
-      return res.status(400).json({ error: "Book is available for immediate borrowing. No reservation required." });
-    }
-
-    const newReservation = await prisma.reservation.create({
-      data: {
-        bookId,
-        userId: currentUser.id,
-        queuePosition: book.reservations.length + 1,
-        status: "PENDING"
-      }
-    });
-
-    res.json(newReservation);
   });
 
   // Get active reservations
   app.get("/api/reservations", async (req, res) => {
     const user = (req as any).user;
-    const reservations = await prisma.reservation.findMany({
-      where: user.role === "LIBRARIAN" ? { status: "PENDING" } : { userId: user.id, status: "PENDING" },
-      include: { book: true, user: true },
-      orderBy: { reservedAt: 'desc' }
-    });
-    res.json(reservations);
+    if (!user) return res.status(401).json({ error: "Unauthorized" });
+
+    try {
+      const reservations = await prisma.reservation.findMany({
+        where: user.role === "LIBRARIAN" ? { status: "PENDING" } : { userId: user.id, status: "PENDING" },
+        include: { 
+          book: {
+            include: {
+              transactions: { 
+                where: { 
+                  status: { in: ["BORROWED", "OVERDUE"] } 
+                } 
+              }
+            }
+          }, 
+          user: true 
+        },
+        orderBy: { reservedAt: 'desc' }
+      });
+
+      // Enrich with isReady status
+      const enriched = reservations.map(resv => {
+        // A book is ready if the user's position is within the number of available copies
+        const borrowedCount = resv.book.transactions.length;
+        const inLibrary = resv.book.totalCopies - borrowedCount;
+        const isReady = resv.queuePosition <= inLibrary && resv.status === "PENDING";
+        
+        return {
+          ...resv,
+          isReady
+        };
+      });
+
+      res.json(enriched);
+    } catch (err) {
+      res.status(500).json({ error: "Failed to fetch reservations" });
+    }
   });
 
   // Cancel Reservation
   app.delete("/api/reservations/:id", async (req, res) => {
-    const currentUser = (req as any).user;
     const { id } = req.params;
+    const user = (req as any).user;
+    if (!user) return res.status(401).json({ error: "Unauthorized" });
 
     try {
-      const reservation = await prisma.reservation.findUnique({ where: { id } });
-
-      if (!reservation) return res.status(404).json({ error: "Reservation not found" });
-      if (reservation.status !== "PENDING") return res.status(400).json({ error: "Only pending reservations can be cancelled" });
-      if (reservation.userId !== currentUser.id && currentUser.role !== "LIBRARIAN") {
-        return res.status(403).json({ error: "You can only cancel your own reservations" });
-      }
-
       await prisma.$transaction(async (tx) => {
+        const reservation = await tx.reservation.findUnique({
+          where: { id }
+        });
+
+        if (!reservation) throw new Error("Reservation not found");
+        
+        // Authorization check
+        if (user.role !== "LIBRARIAN" && reservation.userId !== user.id) {
+          throw new Error("You are not authorized to cancel this reservation");
+        }
+
+        // 1. Cancel the reservation
         await tx.reservation.update({
           where: { id },
           data: { status: "CANCELLED" }
         });
 
-        // Recalculate queue positions for remaining pending reservations
+        // 2. Recalculate queue positions for remaining pending reservations for this book
         const remaining = await tx.reservation.findMany({
-          where: { bookId: reservation.bookId, status: "PENDING" },
-          orderBy: { reservedAt: 'asc' }
+          where: { 
+            bookId: reservation.bookId, 
+            status: "PENDING" 
+          },
+          orderBy: { queuePosition: 'asc' }
         });
 
+        // Re-index sequentially to avoid gaps
         for (let i = 0; i < remaining.length; i++) {
           await tx.reservation.update({
             where: { id: remaining[i].id },
@@ -722,8 +910,9 @@ async function startServer() {
       });
 
       res.json({ message: "Reservation cancelled successfully" });
-    } catch (err) {
-      res.status(500).json({ error: "Failed to cancel reservation" });
+    } catch (err: any) {
+      console.error("Cancel reservation error:", err);
+      res.status(400).json({ error: err.message || "Failed to cancel reservation" });
     }
   });
 
@@ -793,6 +982,89 @@ async function startServer() {
     });
   });
 
+  // Process "Due Tomorrow" Notifications (Librarian only)
+  app.post("/api/notifications/process-due-soon", async (req, res) => {
+    const user = (req as any).user;
+    if (!user || user.role !== "LIBRARIAN") return res.status(403).json({ error: "Access denied" });
+
+    try {
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      tomorrow.setHours(0, 0, 0, 0);
+
+      const dayAfterTomorrow = new Date(tomorrow);
+      dayAfterTomorrow.setDate(dayAfterTomorrow.getDate() + 1);
+
+      const dueTomorrow = await prisma.transaction.findMany({
+        where: {
+          status: "BORROWED",
+          dueDate: {
+            gte: tomorrow,
+            lt: dayAfterTomorrow
+          }
+        },
+        include: { user: true, book: true }
+      });
+
+      let count = 0;
+      for (const t of dueTomorrow) {
+        // Check if a notification for this transaction and type already exists for today
+        // (to avoid spamming if run multiple times)
+        const existing = await prisma.notification.findFirst({
+          where: {
+            userId: t.userId,
+            type: "DUE_SOON",
+            message: { contains: t.book.title },
+            createdAt: {
+              gte: new Date(new Date().setHours(0,0,0,0))
+            }
+          }
+        });
+
+        if (!existing) {
+          await prisma.notification.create({
+            data: {
+              userId: t.userId,
+              type: "DUE_SOON",
+              message: `Reminder: Your borrowed book "${t.book.title}" is due for return tomorrow. Please return it to avoid late fees.`
+            }
+          });
+          count++;
+        }
+      }
+
+      res.json({ message: "Due soon notifications processed", count });
+    } catch (err) {
+      console.error("Process due soon error:", err);
+      res.status(500).json({ error: "Failed to process notifications" });
+    }
+  });
+
+  // Get User Notifications
+  app.get("/api/me/notifications", async (req, res) => {
+    const user = (req as any).user;
+    if (!user) return res.status(401).json({ error: "Unauthorized" });
+
+    const notifications = await prisma.notification.findMany({
+      where: { userId: user.id },
+      orderBy: { createdAt: 'desc' },
+      take: 20
+    });
+    res.json(notifications);
+  });
+
+  // Mark Notification as Read
+  app.patch("/api/me/notifications/:id/read", async (req, res) => {
+    const user = (req as any).user;
+    if (!user) return res.status(401).json({ error: "Unauthorized" });
+
+    await prisma.notification.updateMany({
+      where: { id: req.params.id, userId: user.id },
+      data: { isRead: true }
+    });
+    res.json({ success: true });
+  });
+
   // --- Vite Middleware ---
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
@@ -808,7 +1080,7 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, () => {
+  app.listen(PORT, "0.0.0.0", () => {
     console.log(`🚀 Server running on http://localhost:${PORT}`);
   });
 }

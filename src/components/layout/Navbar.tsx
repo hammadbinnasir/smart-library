@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Bell } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
@@ -9,17 +9,36 @@ interface NavbarProps {
   notifications?: any[];
 }
 
-const tabTitles: Record<string, string> = {
-  dashboard: 'Librarian Dashboard',
-  search: 'Advanced Book Search',
-  reservations: 'Reservation Queue',
-  moderation: 'Inventory Moderation',
-  history: 'My Borrowing History',
-};
-
 export const Navbar = ({ user, onLogout, activeTab, notifications = [] }: NavbarProps) => {
+  const tabTitles: Record<string, string> = {
+    dashboard: user?.role === 'LIBRARIAN' ? 'Librarian Dashboard' : 'Student Dashboard',
+    search: 'Advanced Book Search',
+    reservations: 'Reservation Queue',
+    moderation: 'Inventory Moderation',
+    history: 'My Borrowing History',
+    profile: 'My Profile',
+  };
   const [showNotifs, setShowNotifs] = useState(false);
+  const [visible, setVisible] = useState(true);
   const notifRef = useRef<HTMLDivElement>(null);
+
+  // Visible ONLY when at the very top of the page
+  useEffect(() => {
+    const scrollContainer = document.getElementById('main-scroll-area') ?? window;
+
+    const handleScroll = () => {
+      const currentY =
+        scrollContainer === window
+          ? window.scrollY
+          : (scrollContainer as HTMLElement).scrollTop;
+
+      // Show only when within 10px of the top
+      setVisible(currentY <= 10);
+    };
+
+    scrollContainer.addEventListener('scroll', handleScroll, { passive: true });
+    return () => scrollContainer.removeEventListener('scroll', handleScroll);
+  }, []);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -32,10 +51,16 @@ export const Navbar = ({ user, onLogout, activeTab, notifications = [] }: Navbar
   }, []);
 
   return (
-    <header className="flex justify-between items-center mb-8 bg-white/40 backdrop-blur-xl sticky top-0 py-6 z-[99] isolate border-b border-white/20 -mx-8 px-8">
+    <header
+      style={{
+        transform: visible ? 'translateY(0)' : 'translateY(-110%)',
+        transition: 'transform 0.35s cubic-bezier(0.4, 0, 0.2, 1)',
+      }}
+      className="flex justify-between items-center mb-8 bg-white/40 backdrop-blur-xl sticky top-0 py-6 z-[99] isolate border-b border-white/20 -mx-8 px-8"
+    >
       <div>
         <h2 className="text-3xl font-bold text-brand-dark tracking-tight leading-none">
-          {tabTitles[activeTab] || 'Library System'}
+          {tabTitles[activeTab] || (user?.role === 'LIBRARIAN' ? 'Library System' : 'Student Portal')}
         </h2>
         <p className="text-slate-500 mt-1 font-medium text-xs tracking-tight">Active User: {user?.name}</p>
       </div>
@@ -102,7 +127,7 @@ export const Navbar = ({ user, onLogout, activeTab, notifications = [] }: Navbar
           <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-500/10 to-indigo-500/5 p-1 ring-2 ring-white shadow-xl rotate-3">
             <div className="w-full h-full rounded-xl overflow-hidden bg-white">
               <img
-                src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.gender?.toLowerCase() || 'neutral'}-${user?.id || 'Felix'}`}
+                src={user?.imageUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.gender?.toLowerCase() || 'neutral'}-${user?.id || 'Felix'}`}
                 alt="Avatar"
                 referrerPolicy="no-referrer"
                 className="w-full h-full object-cover"

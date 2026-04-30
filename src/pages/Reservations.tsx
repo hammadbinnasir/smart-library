@@ -1,5 +1,6 @@
 import React from 'react';
-import { Clock, Users, Bell, AlertCircle, Info, CheckCircle2 } from 'lucide-react';
+import { Clock, Users, Bell, AlertCircle, Info, CheckCircle2, Book } from 'lucide-react';
+import { format } from 'date-fns';
 import { Card } from '../components/ui/Card';
 import { cn } from '../lib/utils';
 
@@ -7,10 +8,11 @@ interface ReservationsProps {
   stats: any;
   reservations: any[];
   handleCancel: (reservationId: string, bookId: string) => void;
+  handleBorrow: (bookId: string) => void;
   user: any;
 }
 
-export const Reservations = ({ stats, reservations, handleCancel, user }: ReservationsProps) => {
+export const Reservations = ({ stats, reservations, handleCancel, handleBorrow, user }: ReservationsProps) => {
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
       <Card className="p-10 text-center max-w-3xl mx-auto group shadow-2xl shadow-indigo-100/40 relative overflow-hidden bg-white border-slate-100 transition-all hover:border-indigo-200">
@@ -37,12 +39,14 @@ export const Reservations = ({ stats, reservations, handleCancel, user }: Reserv
                 <div className="p-3 bg-indigo-50 text-indigo-600 rounded-2xl group-hover/card:bg-indigo-600 group-hover/card:text-white transition-colors">
                   <Users size={22} />
                 </div>
-                <h4 className="font-bold text-slate-800 text-sm">System Capacity</h4>
+                <h4 className="font-bold text-slate-800 text-sm">
+                  {user?.role === 'LIBRARIAN' ? 'System Capacity' : 'My Usage'}
+                </h4>
               </div>
               <div className="space-y-4">
                 <div className="flex justify-between items-center text-sm">
                   <span className="text-slate-500 font-medium">Active Reservations</span>
-                  <span className="font-bold px-3 py-1 bg-white rounded-xl shadow-sm border border-slate-100 text-indigo-600">{stats?.activeReservations || 0}</span>
+                  <span className="font-bold px-3 py-1 bg-white rounded-xl shadow-sm border border-slate-100 text-indigo-600">{reservations.length}</span>
                 </div>
                 <div className="flex justify-between items-center text-sm">
                   <span className="text-slate-500 font-medium">Average Wait Time</span>
@@ -100,48 +104,69 @@ export const Reservations = ({ stats, reservations, handleCancel, user }: Reserv
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {reservations.map((res: any) => (
               <Card key={res.id} className="p-6 bg-white border-slate-100 hover:border-indigo-200 transition-all shadow-sm group">
-                <div className="flex items-start gap-5">
-                  <div className="w-14 h-16 bg-slate-50 rounded-xl overflow-hidden shadow-inner border border-slate-100 shrink-0">
-                    <img 
-                      src={`https://covers.openlibrary.org/b/isbn/${res.book.isbn.replace(/-/g, '')}-M.jpg`}
-                      alt={res.book.title}
-                      className="w-full h-full object-cover"
-                      onError={(e) => { (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1543005128-d39e54a02fd3?q=80&w=100' }}
-                    />
-                  </div>
-                  <div className="flex-1">
-                    <div className="flex justify-between items-start mb-2">
-                      <div>
-                        <p className="font-bold text-slate-800 leading-tight group-hover:text-indigo-600 transition-colors">{res.book.title}</p>
-                        <p className="text-[10px] text-slate-500 font-medium">by {res.book.author}</p>
-                      </div>
-                      <span className="px-2 py-1 bg-amber-50 text-amber-600 text-[9px] font-bold rounded uppercase border border-amber-100">
-                        WAITING
-                      </span>
+                  <div className="flex gap-8 relative z-10">
+                    <div className="w-32 h-44 shrink-0 rounded-[2rem] overflow-hidden shadow-2xl shadow-indigo-900/20 group-hover:scale-105 transition-transform duration-500 ring-1 ring-white/20">
+                      {res.book?.isbn ? (
+                        <img 
+                          src={`https://covers.openlibrary.org/b/isbn/${res.book?.isbn}-L.jpg`} 
+                          alt={res.book?.title}
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1543004218-ee14110497f8?q=80&w=300&auto=format&fit=crop';
+                          }}
+                        />
+                      ) : (
+                        <div className="w-full h-full bg-slate-100 flex items-center justify-center text-slate-300">
+                          <BookIcon size={32} />
+                        </div>
+                      )}
                     </div>
                     
-                    <div className="flex items-end justify-between mt-4">
-                       <div className="space-y-1">
+                    <div className="flex-1 flex flex-col justify-between py-2">
+                      <div>
+                        <div className="flex justify-between items-start mb-2">
+                          <span className="px-3 py-1 bg-indigo-50 text-indigo-600 text-[10px] font-black uppercase tracking-widest rounded-lg border border-indigo-100 shadow-sm">
+                            {res.book?.category || 'Library Item'}
+                          </span>
+                        </div>
+                        <h3 className="text-2xl font-black text-slate-800 mb-2 tracking-tight group-hover:text-indigo-600 transition-colors">
+                          {res.book?.title || 'Unknown Title'}
+                        </h3>
+                        <p className="text-slate-500 font-bold text-sm flex items-center gap-2">
+                          by <span className="text-slate-800">{res.book?.author || 'Unknown Author'}</span>
+                        </p>
+                      </div>
+
+                      <div className="space-y-1">
                          {user?.role === 'LIBRARIAN' && (
                            <div className="flex items-center gap-1.5 text-[10px] text-indigo-600 font-bold uppercase tracking-wider mb-2">
-                             <Users size={12} /> {res.user.name}
+                             <Users size={12} /> {res.user?.name || 'Unknown User'}
                            </div>
                          )}
                          <div className="flex items-center gap-2">
                            <div className="px-2 py-1 bg-slate-50 rounded text-[10px] font-bold text-slate-600 uppercase tracking-tight">Position: #{res.queuePosition}</div>
-                           <div className="text-[10px] text-slate-400 font-medium tracking-tight">Joined {format(new Date(res.reservedAt), 'MMM dd, yyyy')}</div>
+                           <div className="text-[10px] text-slate-400 font-medium tracking-tight">Joined {res.reservedAt ? format(new Date(res.reservedAt), 'MMM dd, yyyy') : 'Recently'}</div>
                          </div>
                        </div>
                        
-                       <button
-                         onClick={() => handleCancel(res.id, res.bookId)}
-                         className="px-3 py-1.5 bg-white border border-slate-100 text-rose-500 hover:bg-rose-500 hover:text-white rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all shadow-sm"
-                       >
-                         Remove
-                       </button>
+                       <div className="flex gap-2">
+                         {res.isReady && (
+                           <button
+                             onClick={() => handleBorrow(res.bookId)}
+                             className="px-3 py-1.5 bg-emerald-500 text-white hover:bg-emerald-600 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all shadow-md shadow-emerald-200"
+                           >
+                             Claim Book
+                           </button>
+                         )}
+                         <button
+                           onClick={() => handleCancel(res.id, res.bookId)}
+                           className="px-3 py-1.5 bg-white border border-slate-100 text-rose-500 hover:bg-rose-500 hover:text-white rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all shadow-sm"
+                         >
+                           Remove
+                         </button>
+                       </div>
                     </div>
                   </div>
-                </div>
               </Card>
             ))}
           </div>

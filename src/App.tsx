@@ -12,7 +12,9 @@ import { Profile } from './pages/Profile';
 import { AddBookModal } from './components/modals/AddBookModal';
 import { BookDetailsModal } from './components/modals/BookDetailsModal';
 import { AuthPage } from './components/auth/AuthPage';
+import { ResetPasswordPage } from './components/auth/ResetPasswordPage';
 import { cn } from './lib/utils';
+import { ConfirmModal } from './components/modals/ConfirmModal';
 
 // --- Types ---
 interface User {
@@ -26,13 +28,61 @@ interface User {
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
+  const [resetToken, setResetToken] = useState<string | null>(null);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get('token');
+    if (window.location.pathname.includes('/reset-password') && token) {
+      setResetToken(token);
+    }
+  }, []);
   const [activeTab, setActiveTab] = useState<'dashboard' | 'search' | 'reservations' | 'moderation' | 'history' | 'profile'>('dashboard');
   const [books, setBooks] = useState<any[]>([]);
   const [allCategories, setAllCategories] = useState<string[]>([]);
   const [stats, setStats] = useState<any>(null);
   const [history, setHistory] = useState<any[]>([]);
   const [reservations, setReservations] = useState<any[]>([]);
+  const [notifications, setNotifications] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+
+  const fetchNotifications = async () => {
+    try {
+      const res = await fetch('/api/me/notifications');
+      if (res.ok) {
+        const data = await res.json();
+        setNotifications(data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch notifications');
+    }
+  };
+
+  const handleMarkAsRead = async (id: string) => {
+    try {
+      const res = await fetch(`/api/me/notifications/${id}/read`, { method: 'PATCH' });
+      if (res.ok) {
+        fetchNotifications();
+      }
+    } catch (err) {
+      console.error('Failed to mark as read');
+    }
+  };
+
+  const handleProcessDueSoon = async () => {
+    try {
+      const res = await fetch('/api/notifications/process-due-soon', { method: 'POST' });
+      const data = await res.json();
+      if (res.ok) {
+        showToast('success', `${data.count} notifications sent to users.`);
+        fetchStats();
+      } else {
+        showToast('error', data.error);
+      }
+    } catch (err) {
+      showToast('error', 'Failed to process alerts.');
+    }
+  };
   const [allUsers, setAllUsers] = useState<User[]>([]);
   
   // Search & Filter State
@@ -53,6 +103,20 @@ export default function App() {
     coverFile: null as File | null, 
     imagePreview: null as string | null 
   });
+  
+  // Custom Confirmation State
+  const [confirmConfig, setConfirmConfig] = useState<{
+    show: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+  }>({
+    show: false,
+    title: '',
+    message: '',
+    onConfirm: () => {}
+  });
+
   const [notification, setNotification] = useState<{type: 'success' | 'error', message: string} | null>(null);
 
   // --- Initial Data Loading ---
@@ -76,17 +140,11 @@ export default function App() {
     if (user?.role === 'LIBRARIAN') {
       fetchStats();
       fetchAllUsers();
-    } else if (activeTab === 'dashboard' || activeTab === 'moderation') {
-      setActiveTab('search');
     }
     
-    if (activeTab === 'history') {
-      fetchHistory();
-    }
-
-    if (activeTab === 'reservations') {
-      fetchReservations();
-    }
+    if (activeTab === 'history') fetchHistory();
+    if (activeTab === 'reservations') fetchReservations();
+    if (activeTab === 'dashboard' || activeTab === 'profile') fetchNotifications();
   }, [user, activeTab]);
 
   // --- API Methods ---
@@ -121,8 +179,10 @@ export default function App() {
       if (filterAvailable) params.append('available', 'true');
       
       const res = await fetch(`/api/books?${params.toString()}`);
-      const data = await res.json();
-      setBooks(data);
+      if (res.ok) {
+        const data = await res.json();
+        setBooks(data);
+      }
     } catch (err) {
       console.error("Books fetch failed", err);
     } finally {
@@ -133,8 +193,10 @@ export default function App() {
   const fetchStats = async () => {
     try {
       const res = await fetch('/api/stats');
-      const data = await res.json();
-      setStats(data);
+      if (res.ok) {
+        const data = await res.json();
+        setStats(data);
+      }
     } catch (err) {
       console.error("Stats fetch failed", err);
     }
@@ -143,8 +205,10 @@ export default function App() {
   const fetchHistory = async () => {
     try {
       const res = await fetch('/api/history');
-      const data = await res.json();
-      setHistory(data);
+      if (res.ok) {
+        const data = await res.json();
+        setHistory(data);
+      }
     } catch (err) {
       console.error("History fetch failed", err);
     }
@@ -161,26 +225,61 @@ export default function App() {
   };
 
   const handleDeleteUser = async (userId: string) => {
-    if (!window.confirm('Are you sure you want to remove this member? All history will be archived.')) return;
-    try {
-      const res = await fetch(`/api/users/${userId}`, { method: 'DELETE' });
-      const data = await res.json();
-      if (res.ok) {
-        showToast('success', data.message);
-        fetchAllUsers();
-      } else {
-        showToast('error', data.error);
+    setConfirmConfig({
+      show: true,
+      title: 'Remove Member?',
+      message: 'Are you sure you want to remove this member? All history will be archived.',
+      onConfirm: async () => {
+        try {
+          const res = await fetch(`/api/users/${userId}`, { method: 'DELETE' });
+          const data = await res.json();
+          if (res.ok) {
+            showToast('success', data.message);
+            fetchAllUsers();
+          } else {
+            showToast('error', data.error);
+          }
+        } catch (err: any) {
+          showToast('error', 'Fetch error: ' + err.message);
+          console.error('Delete member error:', err);
+        }
       }
-    } catch (err) {
-      showToast('error', 'Operation failed.');
-    }
+    });
+  };
+
+  const handleDeleteBook = async (bookId: string) => {
+    setConfirmConfig({
+      show: true,
+      title: 'Delete Book?',
+      message: 'Are you sure you want to delete this book? This will also remove all borrowing and reservation history for this item.',
+      onConfirm: async () => {
+        console.log('Deleting book:', bookId);
+        try {
+          const res = await fetch(`/api/books/${bookId}`, { method: 'DELETE' });
+          console.log('Delete response status:', res.status);
+          const data = await res.json();
+          if (res.ok) {
+            showToast('success', data.message);
+            fetchBooks();
+            fetchStats();
+          } else {
+            showToast('error', data.error);
+          }
+        } catch (err: any) {
+          showToast('error', 'Fetch error: ' + err.message);
+          console.error('Delete fetch error:', err);
+        }
+      }
+    });
   };
 
   const fetchReservations = async () => {
     try {
       const res = await fetch('/api/reservations');
-      const data = await res.json();
-      setReservations(data);
+      if (res.ok) {
+        const data = await res.json();
+        setReservations(data);
+      }
     } catch (err) {
       console.error("Reservations fetch failed", err);
     }
@@ -190,6 +289,12 @@ export default function App() {
     try {
       await fetch('/api/auth/logout', { method: 'POST' });
       setUser(null);
+      setStats(null);
+      setHistory([]);
+      setReservations([]);
+      setNotifications([]);
+      setAllUsers([]);
+      setActiveTab('dashboard');
       showToast('success', 'Logged out of system');
     } catch (err) {
       showToast('error', 'Logout failed');
@@ -198,7 +303,7 @@ export default function App() {
 
   const handleBorrow = async (bookId: string) => {
     try {
-      const res = await fetch('/api/transactions/borrow', {
+      const res = await fetch('/api/books/borrow', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ bookId })
@@ -208,17 +313,18 @@ export default function App() {
         showToast('success', 'Book borrowed successfully! Track due dates in history.');
         fetchBooks();
         fetchHistory();
+        fetchReservations(); // Refresh reservations too
       } else {
         showToast('error', data.error);
       }
     } catch (err) {
-      showToast('error', 'Borrow transaction failed. Check database connection.');
+      showToast('error', 'Borrow transaction failed.');
     }
   };
 
   const handleReturn = async (transactionId: string) => {
     try {
-      const res = await fetch('/api/transactions/return', {
+      const res = await fetch('/api/books/return', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ transactionId })
@@ -228,6 +334,7 @@ export default function App() {
         showToast('success', data.message);
         fetchStats();
         fetchBooks();
+        fetchHistory();
       } else {
         showToast('error', data.error);
       }
@@ -247,6 +354,7 @@ export default function App() {
       if (res.ok) {
         showToast('success', `Reserved! Queue position ${data.queuePosition} confirmed.`);
         fetchStats();
+        fetchReservations();
       } else {
         showToast('error', data.error);
       }
@@ -265,6 +373,7 @@ export default function App() {
         showToast('success', 'Reservation cancelled successfully.');
         fetchBookDetails(bookId);
         fetchStats();
+        fetchReservations();
       } else {
         showToast('error', data.error);
       }
@@ -385,6 +494,10 @@ export default function App() {
     return [];
   }, [user, stats, history]);
 
+  if (resetToken) {
+    return <ResetPasswordPage token={resetToken} onComplete={() => setResetToken(null)} />;
+  }
+
   if (!user && !loading) {
     return <AuthPage onLogin={setUser} />;
   }
@@ -410,7 +523,7 @@ export default function App() {
       />
 
       {/* Primary surface area */}
-      <main className="flex-1 p-8 overflow-y-auto custom-scrollbar relative">
+      <main id="main-scroll-area" className="flex-1 p-8 overflow-y-auto custom-scrollbar relative">
         <Navbar 
           user={user} 
           onLogout={logout} 
@@ -424,7 +537,11 @@ export default function App() {
               stats={stats} 
               loading={loading} 
               handleReturn={handleReturn} 
-              handleProcessOverdue={handleProcessOverdue} 
+              handleProcessOverdue={handleProcessOverdue}
+              handleProcessDueSoon={handleProcessDueSoon}
+              notifications={notifications}
+              handleMarkAsRead={handleMarkAsRead}
+              user={user}
             />
           )}
           {activeTab === 'search' && (
@@ -444,7 +561,15 @@ export default function App() {
               fetchBookDetails={fetchBookDetails}
             />
           )}
-          {activeTab === 'reservations' && <Reservations stats={stats} reservations={reservations} handleCancel={handleCancelReservation} user={user} />}
+          {activeTab === 'reservations' && (
+            <Reservations 
+              stats={stats} 
+              reservations={reservations} 
+              handleCancel={handleCancelReservation} 
+              handleBorrow={handleBorrow}
+              user={user} 
+            />
+          )}
           {activeTab === 'history' && <History history={history} />}
           {activeTab === 'moderation' && (
             <Moderation 
@@ -453,6 +578,7 @@ export default function App() {
               setShowAddModal={setShowAddModal} 
               fetchBookDetails={fetchBookDetails} 
               handleDeleteUser={handleDeleteUser}
+              handleDeleteBook={handleDeleteBook}
             />
           )}
           {activeTab === 'profile' && <Profile user={user} onUpdateUser={setUser} showToast={showToast} />}
@@ -495,6 +621,13 @@ export default function App() {
         loading={detailsLoading}
         onCancelReservation={handleCancelReservation}
         currentUser={user}
+      />
+      <ConfirmModal 
+        show={confirmConfig.show}
+        onClose={() => setConfirmConfig({ ...confirmConfig, show: false })}
+        onConfirm={confirmConfig.onConfirm}
+        title={confirmConfig.title}
+        message={confirmConfig.message}
       />
     </div>
   );

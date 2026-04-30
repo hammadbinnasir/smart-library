@@ -34,7 +34,15 @@ DIRECT_URL="your_supabase_postgresql_direct_url"
 
 JWT_SECRET="generate_any_random_string_here"
 ADMIN_CODE="SMARTLIB-2026"
+
+# (Optional) Email Reset Configuration
+SMTP_HOST="smtp.gmail.com"
+SMTP_PORT="587"
+SMTP_USER="your-email@gmail.com"
+SMTP_PASS="your-app-password"
 ```
+> **Note:** If SMTP is not configured, password reset links will be printed to the server terminal for development purposes.
+
 > **Critical Fix:** Supabase requires a `DIRECT_URL` (Port 5432) for `prisma db push` to work, while `DATABASE_URL` (Port 6543) is used by the application for high performance.
 
 ### 4. Database Sync

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Plus, Users, ShieldCheck, Database, Book as BookIcon, ChevronRight } from 'lucide-react';
+import { Plus, Users, ShieldCheck, Database, Book as BookIcon, ChevronRight, Trash2 } from 'lucide-react';
 import { Card } from '../components/ui/Card';
 import { cn } from '../lib/utils';
 
@@ -9,9 +9,10 @@ interface ModerationProps {
   setShowAddModal: (s: boolean) => void;
   fetchBookDetails: (book: any) => void;
   handleDeleteUser: (id: string) => void;
+  handleDeleteBook: (id: string) => void;
 }
 
-export const Moderation = ({ books, allUsers, setShowAddModal, fetchBookDetails, handleDeleteUser }: ModerationProps) => {
+export const Moderation = ({ books, allUsers, setShowAddModal, fetchBookDetails, handleDeleteUser, handleDeleteBook }: ModerationProps) => {
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -80,12 +81,21 @@ export const Moderation = ({ books, allUsers, setShowAddModal, fetchBookDetails,
                       </div>
                     </td>
                     <td className="px-6 py-5 text-right pr-6">
-                      <button 
-                        onClick={() => fetchBookDetails(book)}
-                        className="px-4 py-2 bg-white text-indigo-600 text-[10px] font-bold uppercase tracking-wider rounded-xl border border-indigo-100 hover:bg-indigo-600 hover:text-white transition-all shadow-sm flex items-center gap-1 ml-auto"
-                      >
-                        Details <ChevronRight size={14} />
-                      </button>
+                      <div className="flex items-center justify-end gap-2">
+                        <button 
+                          onClick={() => fetchBookDetails(book)}
+                          className="px-4 py-2 bg-white text-indigo-600 text-[10px] font-bold uppercase tracking-wider rounded-xl border border-indigo-100 hover:bg-indigo-600 hover:text-white transition-all shadow-sm flex items-center gap-1"
+                        >
+                          Details <ChevronRight size={14} />
+                        </button>
+                        <button 
+                          onClick={() => handleDeleteBook(book.id)}
+                          className="p-2 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-all"
+                          title="Remove Book"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -106,7 +116,7 @@ export const Moderation = ({ books, allUsers, setShowAddModal, fetchBookDetails,
           </div>
 
           <div className="space-y-4 relative z-10">
-            {allUsers.map((u: any) => (
+            {allUsers.filter((u: any) => u.role === 'STUDENT').map((u: any) => (
               <div key={u.id} className="flex items-center justify-between p-5 bg-slate-50 rounded-2xl border border-slate-100 group-hover:border-indigo-100 transition-all hover:bg-white hover:shadow-md">
                 <div className="flex items-center gap-4">
                   <div className="w-12 h-12 bg-slate-50 rounded-2xl overflow-hidden border border-slate-100 shadow-inner p-0.5">

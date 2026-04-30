@@ -17,6 +17,9 @@ export const AuthPage = ({ onLogin }: AuthPageProps) => {
   const [adminCode, setAdminCode] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [isForgotPassword, setIsForgotPassword] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotSuccess, setForgotSuccess] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -76,6 +79,42 @@ export const AuthPage = ({ onLogin }: AuthPageProps) => {
       }
     } catch (err) {
       setError('Connection refused. Is the server running?');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setForgotSuccess('');
+    
+    if (!forgotEmail) {
+      setError('Please enter your email address');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const res = await fetch('/api/auth/forgot-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: forgotEmail, role: portal })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setForgotSuccess(data.message);
+        // Direct redirect for convenience if URL is returned (e.g., in dev)
+        if (data.resetUrl) {
+          setTimeout(() => {
+            window.location.href = data.resetUrl;
+          }, 1500); // 1.5s delay to let user see success message
+        }
+      } else {
+        setError(data.error || 'Failed to process request');
+      }
+    } catch (err) {
+      setError('Connection error');
     } finally {
       setLoading(false);
     }
@@ -155,6 +194,85 @@ export const AuthPage = ({ onLogin }: AuthPageProps) => {
                     </div>
                   </button>
                 </div>
+              </motion.div>
+            ) : isForgotPassword ? (
+              <motion.div
+                key="forgot-password"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+              >
+                <div className="mb-10 relative flex items-center justify-center">
+                  <button 
+                    onClick={() => { setIsForgotPassword(false); setError(''); setForgotSuccess(''); }}
+                    className="absolute left-0 p-3 text-slate-300 hover:text-brand-dark hover:bg-slate-100 rounded-2xl transition-all"
+                  >
+                    <ArrowRight size={22} className="rotate-180" />
+                  </button>
+                  <div className="text-center">
+                    <h2 className="text-2xl font-bold text-brand-dark mb-1 tracking-tight">Reset Password</h2>
+                    <p className="text-slate-500 font-medium text-xs tracking-tight">Enter your email to receive a reset link</p>
+                  </div>
+                </div>
+
+                {forgotSuccess ? (
+                  <div className="text-center space-y-6">
+                    <div className="w-20 h-20 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <Mail size={40} />
+                    </div>
+                    <p className="text-slate-600 font-medium text-sm leading-relaxed">{forgotSuccess}</p>
+                    <button 
+                      onClick={() => setIsForgotPassword(false)}
+                      className="w-full py-4 bg-brand-dark text-white rounded-2xl text-sm font-bold shadow-lg hover:bg-slate-900 transition-all"
+                    >
+                      Return to Login
+                    </button>
+                  </div>
+                ) : (
+                  <form onSubmit={handleForgotPassword} className="space-y-6">
+                    <div className="space-y-2">
+                      <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500 px-2">Email Address</label>
+                      <div className="relative group">
+                        <Mail className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-brand-dark transition-colors" size={18} />
+                        <input 
+                          type="email" 
+                          required
+                          value={forgotEmail}
+                          onChange={(e) => setForgotEmail(e.target.value)}
+                          placeholder="yourname@example.com" 
+                          className="w-full pl-14 pr-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:border-indigo-500 focus:bg-white transition-all font-medium text-brand-dark text-sm"
+                        />
+                      </div>
+                    </div>
+
+                    <AnimatePresence mode="wait">
+                      {error && (
+                        <motion.div 
+                          initial={{ opacity: 0, y: -5 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -5 }}
+                          className="text-rose-600 text-xs font-bold px-2"
+                        >
+                          {error}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+
+                    <button 
+                      disabled={loading}
+                      className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl text-sm font-bold flex items-center justify-center gap-3 transition-all active:scale-[0.98] disabled:opacity-50 mt-6 shadow-lg shadow-indigo-600/20"
+                    >
+                      {loading ? (
+                        <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      ) : (
+                        <>
+                          Send Reset Link
+                          <ArrowRight size={18} strokeWidth={2} />
+                        </>
+                      )}
+                    </button>
+                  </form>
+                )}
               </motion.div>
             ) : (
               <motion.div
@@ -236,7 +354,18 @@ export const AuthPage = ({ onLogin }: AuthPageProps) => {
                   </div>
 
                   <div className="space-y-2">
-                    <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500 px-2">Password</label>
+                    <div className="flex justify-between items-center px-2">
+                      <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Password</label>
+                      {isLogin && (
+                        <button 
+                          type="button"
+                          onClick={() => setIsForgotPassword(true)}
+                          className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 transition-colors uppercase tracking-tight"
+                        >
+                          Forgot?
+                        </button>
+                      )}
+                    </div>
                     <div className="relative group">
                       <Lock className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-brand-dark transition-colors" size={18} />
                       <input 
