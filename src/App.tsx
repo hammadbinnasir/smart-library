@@ -15,6 +15,7 @@ import { AuthPage } from './components/auth/AuthPage';
 import { ResetPasswordPage } from './components/auth/ResetPasswordPage';
 import { cn } from './lib/utils';
 import { ConfirmModal } from './components/modals/ConfirmModal';
+import { Chatbot } from './components/Chatbot';
 
 // --- Types ---
 interface User {
@@ -629,6 +630,9 @@ export default function App() {
         title={confirmConfig.title}
         message={confirmConfig.message}
       />
+      
+      {/* AI Chatbot Assistant */}
+      {user && <Chatbot />}
     </div>
   );
 }

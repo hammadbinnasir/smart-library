@@ -12,9 +12,9 @@ import multer from "multer";
 import fs from "fs";
 import crypto from "crypto";
 import nodemailer from "nodemailer";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const JWT_SECRET = process.env.JWT_SECRET || "library-secret-key-123";
-
 const prisma = new PrismaClient();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -1063,6 +1063,69 @@ async function startServer() {
       data: { isRead: true }
     });
     res.json({ success: true });
+  });
+
+  // --- AI Chatbot Route (Powered by Gemini) ---
+  app.post("/api/chat", async (req, res) => {
+    const { message } = req.body;
+    const user = (req as any).user;
+
+    try {
+      // 1. Fetch book catalog for context (Limited to top 100 for token efficiency)
+      const books = await prisma.book.findMany({
+        take: 100,
+        select: { title: true, author: true, category: true, availableCopies: true }
+      });
+
+      const catalogContext = books.map(b => 
+        `- ${b.title} by ${b.author} (${b.category}) [${b.availableCopies > 0 ? 'Available' : 'Reserved/Borrowed'}]`
+      ).join('\n');
+
+      // 2. Prepare the system instructions and prompt
+      const prompt = `
+You are "SmartLib AI", a premium, helpful, and professional library assistant for the Smart Library Management system.
+Your goal is to assist students and librarians with their queries.
+
+CONTEXT:
+- Current User: ${user ? user.name : 'Guest'} (Role: ${user?.role || 'None'})
+- Library Policy: Books can be borrowed for 14 days. Reservations are available for borrowed books.
+- System Admin/Librarian: Sheikh Iman Ali
+
+BOOK CATALOG (Current Inventory):
+${catalogContext}
+
+USER MESSAGE: "${message}"
+
+INSTRUCTIONS:
+1. FORMATTING: Use clear bullet points (•) and line breaks (\n) for lists.
+2. BOLDING: Use double asterisks (**Text**) for bolding book titles or important terms. NEVER use triple asterisks.
+3. STRUCTURE: Use double line breaks between paragraphs for a spacious, clean look.
+4. TONE: Be helpful, extremely professional, and use the user's name (${user?.name || 'Guest'}).
+5. CATALOG: Always recommend books that are explicitly listed in the CATALOG provided above.
+6. POLICY: Mention the 14-day borrowing policy when relevant.
+`;
+
+      // 3. Call Gemini AI with Fallback
+      console.log("Using API Key:", process.env.GEMINI_API_KEY ? "PRESENT" : "MISSING");
+      const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
+      let responseText = "";
+      
+      try {
+        const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
+        const result = await model.generateContent(prompt);
+        responseText = result.response.text();
+      } catch (err: any) {
+        console.warn("⚠️ Gemini 3 Flash failed, attempting fallback to gemini-flash-latest...", err.message);
+        const model = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
+        const result = await model.generateContent(prompt);
+        responseText = result.response.text();
+      }
+
+      res.json({ response: responseText });
+    } catch (err) {
+      console.error("AI Chat Error:", err);
+      res.status(500).json({ response: "I'm sorry, I'm having trouble connecting to my AI brain. Please check your internet or try again later." });
+    }
   });
 
   // --- Vite Middleware ---
