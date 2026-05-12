@@ -120,21 +120,17 @@ async function ensureUsers() {
 
 async function startServer() {
   try {
-    try {
-      await ensureUsers();
-      console.log("✅ Database synchronized successfully.");
-    } catch (err) {
-      console.error("❌ Database connection error:", err);
-      console.error("⚠️ Warning: Could not connect to database during startup. System will continue but some features may be unavailable.");
-    }
+    // Non-blocking database sync for Vercel efficiency
+    ensureUsers().catch(err => {
+      console.error("Delayed sync failed:", err);
+    });
 
     const app = express();
-  const PORT = process.env.PORT || 3000;
+    const PORT = process.env.PORT || 3000;
 
-  app.use(express.json());
-  app.use(cookieParser());
+    app.use(express.json());
+    app.use(cookieParser());
   
-  // Serve static uploads
   app.use("/uploads", express.static(path.join(process.cwd(), "public", "uploads")));
 
   // Multer config

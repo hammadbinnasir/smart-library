@@ -77,8 +77,9 @@ export const AuthPage = ({ onLogin }: AuthPageProps) => {
       } else {
         setError(data.error || 'Authentication failed');
       }
-    } catch (err) {
-      setError('Connection refused. Is the server running?');
+    } catch (err: any) {
+      console.error('Login error:', err);
+      setError(`Connection failed: ${err.message || 'Server unreachable'}. Please check your internet or Vercel logs.`);
     } finally {
       setLoading(false);
     }
