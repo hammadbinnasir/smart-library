@@ -14,6 +14,14 @@ import crypto from "crypto";
 import nodemailer from "nodemailer";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
+// Auto-map Vercel Supabase variables to Prisma names
+if (!process.env.DATABASE_URL && process.env.POSTGRES_PRISMA_URL) {
+  process.env.DATABASE_URL = process.env.POSTGRES_PRISMA_URL;
+}
+if (!process.env.DIRECT_URL && process.env.POSTGRES_URL_NON_POOLING) {
+  process.env.DIRECT_URL = process.env.POSTGRES_URL_NON_POOLING;
+}
+
 const JWT_SECRET = process.env.JWT_SECRET || "library-secret-key-123";
 const prisma = new PrismaClient();
 const __filename = fileURLToPath(import.meta.url);
