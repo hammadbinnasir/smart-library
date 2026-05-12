@@ -1,6 +1,6 @@
 import "dotenv/config";
 import express from "express";
-import { createServer as createViteServer } from "vite";
+// Vite is imported dynamically only in development
 import path from "path";
 import { fileURLToPath } from "url";
 import { addDays, isAfter, format } from "date-fns";
@@ -1139,6 +1139,7 @@ INSTRUCTIONS:
 
   // --- Vite Middleware ---
   if (process.env.NODE_ENV !== "production") {
+    const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",

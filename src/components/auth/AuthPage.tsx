@@ -71,23 +71,25 @@ export const AuthPage = ({ onLogin }: AuthPageProps) => {
         body: JSON.stringify(body)
       });
       
-      const data = await res.json();
+      // Clone the response so we can read it twice if needed
+      const resClone = res.clone();
       
-      if (res.ok) {
-        onLogin(data);
-      } else {
-        setError(data.error || 'Authentication failed');
+      try {
+        const data = await res.json();
+        if (res.ok) {
+          onLogin(data);
+        } else {
+          setError(data.error || 'Authentication failed');
+        }
+      } catch (jsonErr) {
+        // If JSON parsing fails, the server crashed with an HTML error page
+        const text = await resClone.text();
+        const cleanText = text.replace(/<[^>]*>?/gm, '').substring(0, 150);
+        setError(`Server Crash: ${cleanText}`);
       }
     } catch (err: any) {
-      console.error('Login error:', err);
-      let details = err.message;
-      if (res) {
-        try {
-          const text = await res.text();
-          details = text.length > 200 ? text.substring(0, 200) + '...' : text;
-        } catch (e) {}
-      }
-      setError(`Server Crash: ${details}`);
+      console.error('Network error:', err);
+      setError(`Network error: ${err.message}. Please check your connection.`);
     } finally {
       setLoading(false);
     }
