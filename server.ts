@@ -126,7 +126,7 @@ async function startServer() {
     console.error("❌ Database connection error:", err);
     console.error("⚠️ Warning: Could not connect to database during startup. System will continue but some features may be unavailable.");
   }
-  
+
   const app = express();
   const PORT = process.env.PORT || 3000;
 
@@ -584,7 +584,7 @@ async function startServer() {
           },
           reservations: {
             include: { user: { select: { name: true } } },
-            orderBy: { createdAt: 'asc' }
+            orderBy: { reservedAt: 'asc' }
           }
         }
       });
@@ -593,9 +593,9 @@ async function startServer() {
 
       res.json({
         book: bookDetail,
-        activeTransactions: bookDetail.transactions.map(t => ({ ...t, userName: (t.user as any)?.name })),
-        reservationQueue: bookDetail.reservations.map(r => ({ ...r, userName: (r.user as any)?.name })),
-        totalReservations: bookDetail.reservations.length
+        activeTransactions: (bookDetail as any).transactions.map((t: any) => ({ ...t, userName: (t.user as any)?.name })),
+        reservationQueue: (bookDetail as any).reservations.map((r: any) => ({ ...r, userName: (r.user as any)?.name })),
+        totalReservations: (bookDetail as any).reservations.length
       });
     } catch (err) {
       console.error("Fetch book details failed:", err);
