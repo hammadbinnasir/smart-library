@@ -79,7 +79,15 @@ export const AuthPage = ({ onLogin }: AuthPageProps) => {
       }
     } catch (err: any) {
       console.error('Login error:', err);
-      setError(`Connection failed: ${err.message || 'Server unreachable'}. Please check your internet or Vercel logs.`);
+      // Try to get more info from the response if it was a crash
+      let details = err.message;
+      try {
+        const text = await res.text();
+        if (text && text.length < 200) details = text;
+        else if (text) details = text.substring(0, 100) + '...';
+      } catch (e) {}
+      
+      setError(`Server Crash: ${details}. Please check Vercel Logs for the full trace.`);
     } finally {
       setLoading(false);
     }
