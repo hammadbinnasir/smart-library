@@ -128,7 +128,7 @@ async function startServer() {
   }
   
   const app = express();
-  const PORT = 3000;
+  const PORT = process.env.PORT || 3000;
 
   app.use(express.json());
   app.use(cookieParser());
@@ -1143,12 +1143,21 @@ INSTRUCTIONS:
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`🚀 Server running on http://localhost:${PORT}`);
-  });
+    return app;
+  } catch (err) {
+    console.error("Critical error during server initialization:", err);
+    throw err;
+  }
 }
 
-startServer().catch(err => {
-  console.error("Server failed to start:", err);
-  process.exit(1);
-});
+const appPromise = startServer();
+
+// For Vercel, we need to export the app as a function
+export default async (req: any, res: any) => {
+  const app = await appPromise;
+  if (!app) {
+    res.status(500).send("Server failed to initialize");
+    return;
+  }
+  return app(req, res);
+};
