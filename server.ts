@@ -120,14 +120,15 @@ async function ensureUsers() {
 
 async function startServer() {
   try {
-    await ensureUsers();
-    console.log("✅ Database synchronized successfully.");
-  } catch (err) {
-    console.error("❌ Database connection error:", err);
-    console.error("⚠️ Warning: Could not connect to database during startup. System will continue but some features may be unavailable.");
-  }
+    try {
+      await ensureUsers();
+      console.log("✅ Database synchronized successfully.");
+    } catch (err) {
+      console.error("❌ Database connection error:", err);
+      console.error("⚠️ Warning: Could not connect to database during startup. System will continue but some features may be unavailable.");
+    }
 
-  const app = express();
+    const app = express();
   const PORT = process.env.PORT || 3000;
 
   app.use(express.json());
