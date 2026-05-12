@@ -130,6 +130,10 @@ async function startServer() {
 
     app.use(express.json());
     app.use(cookieParser());
+
+    app.get("/api/health", (req, res) => {
+      res.json({ status: "ok", message: "Server is alive" });
+    });
   
   app.use("/uploads", express.static(path.join(process.cwd(), "public", "uploads")));
 

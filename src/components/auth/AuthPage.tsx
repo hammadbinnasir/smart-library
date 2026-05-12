@@ -58,13 +58,14 @@ export const AuthPage = ({ onLogin }: AuthPageProps) => {
 
     setLoading(true);
 
+    let res;
     try {
       const endpoint = isLogin ? '/api/auth/login' : '/api/auth/register';
       const body = isLogin 
         ? { email, password, portalRole: portal } 
         : { name, email, password, role: portal, adminCode, gender: gender === '' ? null : gender };
       
-      const res = await fetch(endpoint, {
+      res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body)
@@ -79,15 +80,14 @@ export const AuthPage = ({ onLogin }: AuthPageProps) => {
       }
     } catch (err: any) {
       console.error('Login error:', err);
-      // Try to get more info from the response if it was a crash
       let details = err.message;
-      try {
-        const text = await res.text();
-        if (text && text.length < 200) details = text;
-        else if (text) details = text.substring(0, 100) + '...';
-      } catch (e) {}
-      
-      setError(`Server Crash: ${details}. Please check Vercel Logs for the full trace.`);
+      if (res) {
+        try {
+          const text = await res.text();
+          details = text.length > 200 ? text.substring(0, 200) + '...' : text;
+        } catch (e) {}
+      }
+      setError(`Server Crash: ${details}`);
     } finally {
       setLoading(false);
     }
